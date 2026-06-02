@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Sources — RSSPhaser{% endblock %}
+{% block content %}
+<h2>Sources</h2>
+
+<div class="card">
+  <h3 style="margin-top:0;">Add a source</h3>
+  <form method="post" action="{{ url_for('add_source') }}" style="display:grid; grid-template-columns: 1fr 2fr auto auto; gap:0.6rem; align-items:end;">
+    <div><label>Name</label><input type="text" name="name" required></div>
+    <div><label>Feed URL</label><input type="url" name="url" placeholder="https://example.com/feed.xml" required></div>
+    <div><label><input type="checkbox" name="enabled" checked> Enabled</label></div>
+    <div><button type="submit">Add</button></div>
+  </form>
+</div>
+
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>Name</th><th>URL</th><th>Enabled</th><th>Actions</th></tr>
+    </thead>
+    <tbody>
+      {% for s in sources %}
+      <tr class="row-form">
+        <form method="post" action="{{ url_for('edit_source', source_id=s.id) }}">
+          <td><input type="text" name="name" value="{{ s.name }}" required></td>
+          <td><input type="url" name="url" value="{{ s.url }}" required></td>
+          <td style="text-align:center;"><input type="checkbox" name="enabled" {% if s.enabled %}checked{% endif %}></td>
+          <td style="white-space:nowrap;">
+            <button type="submit" class="secondary">Save</button>
+        </form>
+            <form method="post" action="{{ url_for('delete_source', source_id=s.id) }}" class="inline"
+                  onsubmit="return confirm('Delete source {{ s.name }}?');">
+              <button type="submit" class="danger">Delete</button>
+            </form>
+          </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="muted">No sources yet. Add one above.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

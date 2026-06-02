@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Keywords — RSSPhaser{% endblock %}
+{% block content %}
+<h2>Keywords</h2>
+<p class="muted">
+  Patterns are Python regular expressions, matched case-insensitively. The title
+  is checked first, then the body. Patterns that fail to compile are rejected on
+  save; patterns that exceed the runtime timeout while polling are flagged
+  <span class="pill warn">problematic</span> and skipped.
+</p>
+
+<div class="card">
+  <h3 style="margin-top:0;">Add a keyword</h3>
+  <form method="post" action="{{ url_for('add_keyword') }}" style="display:grid; grid-template-columns: 3fr auto auto; gap:0.6rem; align-items:end;">
+    <div><label>Regex pattern</label><input type="text" name="pattern" placeholder="CVE-\d{4}-\d{4,7}" required></div>
+    <div><label><input type="checkbox" name="enabled" checked> Enabled</label></div>
+    <div><button type="submit">Add</button></div>
+  </form>
+</div>
+
+<div class="card">
+  <table>
+    <thead>
+      <tr><th>Pattern</th><th>Enabled</th><th>Status</th><th>Actions</th></tr>
+    </thead>
+    <tbody>
+      {% for k in keywords %}
+      <tr class="row-form">
+        <form method="post" action="{{ url_for('edit_keyword', keyword_id=k.id) }}">
+          <td><input type="text" name="pattern" value="{{ k.pattern }}" required></td>
+          <td style="text-align:center;"><input type="checkbox" name="enabled" {% if k.enabled %}checked{% endif %}></td>
+          <td>
+            {% if k.problematic %}<span class="pill warn">problematic</span>{% else %}<span class="pill ok">ok</span>{% endif %}
+          </td>
+          <td style="white-space:nowrap;">
+            <button type="submit" class="secondary">Save</button>
+        </form>
+            <form method="post" action="{{ url_for('delete_keyword', keyword_id=k.id) }}" class="inline"
+                  onsubmit="return confirm('Delete this keyword?');">
+              <button type="submit" class="danger">Delete</button>
+            </form>
+          </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="muted">No keywords yet. Add one above.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,66 @@
+# RSSPhaser — one-shot deployment.
+#
+#   1. cp .env.example .env  (and edit it — at minimum set ADMIN_PASSWORD_HASH + SECRET_KEY)
+#   2. docker compose up --build
+#
+# Services:
+#   db        — MariaDB with a persistent named volume + healthcheck.
+#   app       — gunicorn web UI + public feed (waits for db to be healthy).
+#   scheduler — SINGLE dedicated APScheduler process (the only poller).
+#
+# The scheduler runs as its own service (never as a gunicorn worker), which is
+# the structural guarantee that polling happens exactly once. See the README.
+
+services:
+  db:
+    image: mariadb:11.4
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root_password}
+      MARIADB_DATABASE: ${DB_NAME:-rssphaser}
+      MARIADB_USER: ${DB_USER:-rssphaser}
+      MARIADB_PASSWORD: ${DB_PASSWORD:-rssphaser_password}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      # healthcheck.sh ships with the mariadb image.
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Ensure DB_HOST points at the compose service regardless of .env value.
+      DB_HOST: db
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  scheduler:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_HOST: db
+    depends_on:
+      db:
+        condition: service_healthy
+    # Override the default web command — this container only runs the scheduler.
+    command: ["python", "scheduler_main.py"]
+    # Exactly one scheduler. Do NOT scale this service above 1 replica.
+
+volumes:
+  db_data:
