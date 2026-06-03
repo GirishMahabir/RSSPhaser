@@ -1,19 +1,35 @@
 {% extends "base.html" %}
-{% block title %}Login — RSSPhaser{% endblock %}
+{% block title %}Sign in — RSSPhaser{% endblock %}
 {% block content %}
-<div class="card" style="max-width:380px; margin:3rem auto;">
-  <h2 style="margin-top:0;">🛰️ RSSPhaser</h2>
-  <p class="muted">Sign in to manage feeds and keywords.</p>
-  <form method="post" action="{{ url_for('login') }}">
-    <p>
-      <label for="username">Username</label>
-      <input type="text" id="username" name="username" autofocus required>
-    </p>
-    <p>
-      <label for="password">Password</label>
-      <input type="password" id="password" name="password" required>
-    </p>
-    <button type="submit">Log in</button>
-  </form>
+<div style="max-width:380px; margin:9vh auto 0;">
+  <div style="display:flex; align-items:center; gap:11px; margin-bottom:30px;">
+    <span style="color:var(--accent); display:flex;">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.7" stroke-linecap="round">
+        <circle cx="6.5" cy="17.5" r="1.7" fill="currentColor" stroke="none"/>
+        <path d="M6.5 12.5a5 5 0 0 1 5 5"/>
+        <path d="M6.5 7.5a10 10 0 0 1 10 10"/>
+      </svg>
+    </span>
+    <span style="font-family:var(--serif); font-size:24px; font-weight:600; letter-spacing:-.015em;">RSS<b>Phaser</b></span>
+  </div>
+
+  <div class="panel" style="padding:26px 26px 28px;">
+    <div class="page-head" style="margin-bottom:20px;">
+      <h1 style="font-size:21px; margin-bottom:2px;">Sign in</h1>
+      <p>Manage your sources, keywords and filtered feed.</p>
+    </div>
+    <form method="post" action="{{ url_for('login') }}">
+      <label class="field" style="margin-bottom:14px;">
+        <span class="eyebrow">Username</span>
+        <input type="text" name="username" autofocus autocomplete="username" required>
+      </label>
+      <label class="field" style="margin-bottom:20px;">
+        <span class="eyebrow">Password</span>
+        <input type="password" name="password" autocomplete="current-password" required>
+      </label>
+      <button type="submit" style="width:100%; padding:11px;">Sign in</button>
+    </form>
+  </div>
 </div>
 {% endblock %}

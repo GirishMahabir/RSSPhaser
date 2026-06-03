@@ -106,7 +106,7 @@ def seed_if_needed(config: AppConfig) -> None:
             for s in config.source_seeds:
                 session.add(Source(name=s.name, url=s.url, enabled=s.enabled))
             for k in config.keyword_seeds:
-                session.add(Keyword(pattern=k.pattern, enabled=k.enabled))
+                session.add(Keyword(term=k.term, mode=k.mode, enabled=k.enabled))
 
             session.add(AppState(key=STATE_POLL_INTERVAL, value=str(config.poll_interval_minutes)))
             session.add(AppState(key=STATE_INITIALIZED, value="1"))

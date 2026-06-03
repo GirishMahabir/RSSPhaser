@@ -26,7 +26,7 @@ from sqlalchemy.dialects.mysql import insert as mysql_insert
 
 from .config import AppConfig
 from .db import get_session
-from .matching import TimeoutRegexEvaluator, compile_keywords
+from .matching import entry_matches
 from .models import Keyword, Match, Source
 
 log = logging.getLogger("rssphaser.poller")
@@ -102,10 +102,11 @@ def _fetch(source: Source, config: AppConfig) -> requests.Response | None:
     return None
 
 
-def poll_source(source_id: int, config: AppConfig, compiled_keywords) -> dict:
+def poll_source(source_id: int, config: AppConfig, keywords: list[tuple[int, str, str]]) -> dict:
     """Poll a single source. Always returns a status dict; never raises.
 
-    Updates the source row's poll bookkeeping and inserts new matches.
+    ``keywords`` is a list of ``(id, term, mode)`` tuples. Updates the source
+    row's poll bookkeeping and inserts new matches.
     """
     started = time.monotonic()
     status = {"source_id": source_id, "status": "ok", "matches": 0, "error": None}
@@ -156,43 +157,37 @@ def poll_source(source_id: int, config: AppConfig, compiled_keywords) -> dict:
         return status
 
     matched_rows: list[dict] = []
-    timed_out_keyword_ids: set[int] = set()
 
-    # One killable worker process for the whole source, reused across entries.
-    with TimeoutRegexEvaluator(compiled_keywords, config.regex_timeout_seconds) as evaluator:
-        for entry in parsed.entries:
-            title = entry.get("title", "") or ""
-            body = _entry_body(entry)
-            # Truncate body before matching to bound evaluation cost.
-            if len(body) > config.body_truncate_bytes:
-                body = body[: config.body_truncate_bytes]
+    for entry in parsed.entries:
+        title = entry.get("title", "") or ""
+        body = _entry_body(entry)
+        # Truncate the body to bound memory on pathologically large payloads.
+        if len(body) > config.body_truncate_bytes:
+            body = body[: config.body_truncate_bytes]
 
-            outcome = evaluator.evaluate_entry(title, body)
-            timed_out_keyword_ids |= outcome.timed_out_keyword_ids
-            if not outcome.matched:
-                continue
+        # Keep the entry if any keyword matches (title first, then body).
+        if not any(entry_matches(term, mode, title, body) for _kid, term, mode in keywords):
+            continue
 
-            published = (
-                _struct_to_datetime(entry.get("published_parsed"))
-                or _struct_to_datetime(entry.get("updated_parsed"))
-            )
-            matched_rows.append(
-                {
-                    "source_id": source_id,
-                    "dedup_id": _entry_dedup_id(entry),
-                    "title": title[:1024],
-                    "link": (entry.get("link", "") or "")[:2048],
-                    "body": body,
-                    "author": (entry.get("author") or None),
-                    "source_name": name,
-                    "published_at": published.replace(tzinfo=None) if published else None,
-                    "fetched_at": _utcnow().replace(tzinfo=None),
-                }
-            )
+        published = (
+            _struct_to_datetime(entry.get("published_parsed"))
+            or _struct_to_datetime(entry.get("updated_parsed"))
+        )
+        matched_rows.append(
+            {
+                "source_id": source_id,
+                "dedup_id": _entry_dedup_id(entry),
+                "title": title[:1024],
+                "link": (entry.get("link", "") or "")[:2048],
+                "body": body,
+                "author": (entry.get("author") or None),
+                "source_name": name,
+                "published_at": published.replace(tzinfo=None) if published else None,
+                "fetched_at": _utcnow().replace(tzinfo=None),
+            }
+        )
 
     inserted = _store_matches(matched_rows)
-    if timed_out_keyword_ids:
-        _flag_problematic(timed_out_keyword_ids)
 
     # Persist conditional-request headers for next time.
     etag = resp.headers.get("ETag")
@@ -233,16 +228,6 @@ def _store_matches(rows: list[dict]) -> int:
                 if result.rowcount and result.rowcount > 0:
                     inserted += 1
     return inserted
-
-
-def _flag_problematic(keyword_ids: set[int]) -> None:
-    with get_session() as session:
-        with session.begin():
-            for kid in keyword_ids:
-                kw = session.get(Keyword, kid)
-                if kw is not None and not kw.problematic:
-                    kw.problematic = True
-                    kw.problem_note = "Exceeded regex timeout or failed to compile during polling."
 
 
 def _record_status(
@@ -307,35 +292,30 @@ def run_poll_cycle(config: AppConfig) -> dict:
     cycle_start = time.monotonic()
     log.info("Poll cycle starting.")
 
-    # Load enabled sources and compiled keywords once per cycle.
+    # Load enabled sources and keywords once per cycle.
     with get_session() as session:
         source_ids = list(
             session.scalars(select(Source.id).where(Source.enabled.is_(True))).all()
         )
-        keyword_rows = list(
-            session.execute(
-                select(Keyword.id, Keyword.pattern).where(Keyword.enabled.is_(True))
+        keywords: list[tuple[int, str, str]] = [
+            (kid, term, mode)
+            for kid, term, mode in session.execute(
+                select(Keyword.id, Keyword.term, Keyword.mode).where(Keyword.enabled.is_(True))
             ).all()
-        )
-
-    compiled = compile_keywords([(kid, pat) for kid, pat in keyword_rows])
-    # Uncompilable patterns flagged up front.
-    bad_ids = {ck.keyword_id for ck in compiled if ck.regex is None}
-    if bad_ids:
-        _flag_problematic(bad_ids)
+        ]
 
     if not source_ids:
         log.info("Poll cycle: no enabled sources.")
         return {"sources": 0, "matches": 0}
-    if not any(ck.regex is not None for ck in compiled):
-        log.info("Poll cycle: no usable keywords; skipping match work.")
+    if not keywords:
+        log.info("Poll cycle: no enabled keywords; nothing will match this cycle.")
 
     total_matches = 0
     results = []
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     with ThreadPoolExecutor(max_workers=config.poll_max_workers, thread_name_prefix="poll") as ex:
-        futures = {ex.submit(poll_source, sid, config, compiled): sid for sid in source_ids}
+        futures = {ex.submit(poll_source, sid, config, keywords): sid for sid in source_ids}
         for fut in as_completed(futures):
             sid = futures[fut]
             try:

@@ -11,13 +11,9 @@
 # Default poll interval in minutes (seeded into DB on first boot).
 poll_interval_minutes: 15
 
-# Maximum number of bytes of an entry's body to evaluate against regexes.
-# Protects against pathological/huge payloads. Default 100 KB.
+# Maximum number of bytes of an entry's body to keep in memory while matching.
+# Protects against pathologically large payloads. Default 100 KB.
 body_truncate_bytes: 102400
-
-# Hard per-pattern regex evaluation timeout, in seconds. A pattern that
-# exceeds this on an entry is skipped and the keyword is flagged "problematic".
-regex_timeout_seconds: 2.0
 
 # Maximum number of items served in the output /feed.xml feed (newest first).
 output_item_cap: 200
@@ -51,15 +47,25 @@ sources:
     url: "https://www.cisa.gov/cybersecurity-advisories/all.xml"
     enabled: true
 
-# Initial keyword regexes (seeded on first boot only). Case-insensitive.
+# Initial keywords (seeded on first boot only). Case-insensitive. No regex.
+#   mode: "word"     -> whole-word match (precise; avoids false positives)
+#   mode: "contains" -> substring match (good for prefixes like "CVE-")
 keywords:
-  - pattern: "ransomware"
+  - term: "ransomware"
+    mode: "word"
     enabled: true
-  - pattern: "zero[- ]?day"
+  - term: "zero-day"
+    mode: "word"
     enabled: true
-  - pattern: "CVE-\\d{4}-\\d{4,7}"
+  - term: "data breach"
+    mode: "word"
     enabled: true
-  - pattern: "critical (vulnerability|flaw|bug)"
+  - term: "CVE-"
+    mode: "contains"
     enabled: true
-  - pattern: "data breach"
+  - term: "exploit"
+    mode: "word"
+    enabled: true
+  - term: "vulnerability"
+    mode: "word"
     enabled: true

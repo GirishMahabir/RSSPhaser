@@ -60,11 +60,11 @@ class Keyword(Base):
     __tablename__ = "keywords"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    pattern: Mapped[str] = mapped_column(String(512), nullable=False)
+    # The literal term to match (no regex). e.g. "ransomware", "CVE-".
+    term: Mapped[str] = mapped_column(String(512), nullable=False)
+    # Match mode: "contains" (substring) or "word" (whole-word). See app.matching.
+    mode: Mapped[str] = mapped_column(String(16), nullable=False, default="word")
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    # Set when the pattern exceeds the runtime timeout or fails to compile at poll time.
-    problematic: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    problem_note: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
 

@@ -1,66 +1,86 @@
 {% extends "base.html" %}
-{% block title %}Dashboard — RSSPhaser{% endblock %}
+{% block title %}Overview — RSSPhaser{% endblock %}
 {% block content %}
-<h2>Dashboard</h2>
 
-<div class="grid">
-  <div class="stat"><div class="num">{{ total_matches }}</div><div class="muted">Matches stored</div></div>
-  <div class="stat"><div class="num">{{ sources|length }}</div><div class="muted">Sources</div></div>
-  <div class="stat"><div class="num">{{ keyword_count }}</div><div class="muted">Keywords</div></div>
-  <div class="stat"><div class="num">{{ problematic|length }}</div><div class="muted">Problematic keywords</div></div>
+<div class="page-head">
+  <h1>Overview</h1>
+  <p>Polling status and what's flowing into your filtered feed.</p>
 </div>
 
-{% if problematic %}
-<div class="card">
-  <h3 style="margin-top:0;">⚠️ Problematic keywords</h3>
-  <p class="muted">These patterns failed to compile or exceeded the regex timeout during polling and were skipped. Edit them to clear the flag.</p>
-  <ul>
-    {% for kw in problematic %}
-      <li><code>{{ kw.pattern }}</code> — <span class="muted">{{ kw.problem_note }}</span></li>
-    {% endfor %}
-  </ul>
-</div>
-{% endif %}
-
-<div class="card">
-  <h3 style="margin-top:0;">Poll interval</h3>
-  <form method="post" action="{{ url_for('update_interval') }}" style="display:flex; gap:0.6rem; align-items:flex-end; max-width:360px;">
-    <div style="flex:1;">
-      <label for="poll_interval_minutes">Minutes between polls</label>
-      <input type="number" id="poll_interval_minutes" name="poll_interval_minutes" min="1" value="{{ poll_interval }}">
+<div class="metrics">
+  <div class="metric">
+    <div class="num">{{ total_matches }}</div>
+    <div class="lbl eyebrow">Matches stored</div>
+  </div>
+  <div class="metric">
+    <div class="num">{{ enabled_sources }}<small> / {{ sources|length }}</small></div>
+    <div class="lbl eyebrow">Sources active</div>
+  </div>
+  <div class="metric">
+    <div class="num">{{ enabled_keywords }}<small> / {{ keyword_count }}</small></div>
+    <div class="lbl eyebrow">Keywords active</div>
+  </div>
+  <div class="metric">
+    <div class="num" style="font-size:20px; padding-top:8px;">
+      {{ newest_match.strftime('%b %d, %H:%M') if newest_match else '—' }}
     </div>
-    <button type="submit">Save</button>
-  </form>
-  <p class="muted">Changes take effect within ~30 seconds — no restart required.</p>
+    <div class="lbl eyebrow">Newest match (UTC)</div>
+  </div>
 </div>
 
-<div class="card">
-  <h3 style="margin-top:0;">Source status</h3>
+<div class="panel">
+  <div class="panel-head"><h2>Your filtered feed</h2><span class="eyebrow">Public · no auth</span></div>
+  <div class="subscribe">
+    <code id="feedurl">{{ request.url_root }}feed.xml</code>
+    <a class="btn ghost" href="{{ url_for('feed_xml') }}" style="text-decoration:none;">Open feed ↗</a>
+    <span class="hint">Subscribe to this URL in any RSS reader.</span>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h2>Polling</h2><span class="eyebrow">Applies within ~30s</span></div>
+  <form method="post" action="{{ url_for('update_interval') }}"
+        style="display:flex; gap:12px; align-items:flex-end;">
+    <label class="field" style="max-width:200px;">
+      <span class="eyebrow">Interval (minutes)</span>
+      <input type="number" name="poll_interval_minutes" min="1" value="{{ poll_interval }}" class="mono">
+    </label>
+    <button type="submit">Save interval</button>
+    <span class="hint" style="padding-bottom:9px;">No restart required.</span>
+  </form>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h2>Sources</h2><span class="eyebrow">Last poll per source</span></div>
   <table>
     <thead>
-      <tr><th>Source</th><th>Status</th><th>Last poll</th><th>Duration</th><th>Matches (last)</th><th>Last error</th></tr>
+      <tr><th>Source</th><th>Status</th><th>Last poll</th><th style="text-align:right;">Duration</th>
+          <th style="text-align:right;">New</th><th>Detail</th></tr>
     </thead>
     <tbody>
       {% for s in sources %}
       <tr>
         <td>
-          {{ s.name }}
-          {% if not s.enabled %}<span class="pill muted">disabled</span>{% endif %}
-          <div class="muted" style="max-width:320px; overflow:hidden; text-overflow:ellipsis;">{{ s.url }}</div>
+          <div>{{ s.name }}{% if not s.enabled %} <span class="badge off">disabled</span>{% endif %}</div>
+          <div class="sub">{{ s.url }}</div>
         </td>
         <td>
-          {% if s.last_status == 'ok' %}<span class="pill ok">ok</span>
-          {% elif s.last_status == 'not_modified' %}<span class="pill muted">304</span>
-          {% elif s.last_status == 'error' %}<span class="pill err">error</span>
-          {% else %}<span class="pill muted">—</span>{% endif %}
+          {% if s.last_status == 'ok' %}<span class="dot ok">ok</span>
+          {% elif s.last_status == 'not_modified' %}<span class="dot skip">no change</span>
+          {% elif s.last_status == 'error' %}<span class="dot err">error</span>
+          {% else %}<span class="dot idle">never</span>{% endif %}
         </td>
-        <td class="muted">{{ s.last_poll_at.strftime('%Y-%m-%d %H:%M UTC') if s.last_poll_at else '—' }}</td>
-        <td class="muted">{{ (s.last_duration_ms ~ ' ms') if s.last_duration_ms is not none else '—' }}</td>
-        <td>{{ s.last_match_count }}</td>
-        <td class="muted" style="max-width:260px; overflow:hidden; text-overflow:ellipsis;">{{ s.last_error or '—' }}</td>
+        <td class="num-cell" style="color:var(--ink-soft);">
+          {{ s.last_poll_at.strftime('%b %d %H:%M') if s.last_poll_at else '—' }}
+        </td>
+        <td class="num-cell" style="text-align:right; color:var(--muted);">
+          {{ (s.last_duration_ms ~ ' ms') if s.last_duration_ms is not none else '—' }}
+        </td>
+        <td class="num-cell" style="text-align:right;">{{ s.last_match_count }}</td>
+        <td class="sub" title="{{ s.last_error or '' }}">{{ s.last_error or '—' }}</td>
       </tr>
       {% else %}
-      <tr><td colspan="6" class="muted">No sources configured yet.</td></tr>
+      <tr><td colspan="6" class="empty">No sources yet — add some on the Sources page.</td></tr>
       {% endfor %}
     </tbody>
   </table>

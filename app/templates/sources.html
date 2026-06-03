@@ -1,41 +1,49 @@
 {% extends "base.html" %}
 {% block title %}Sources — RSSPhaser{% endblock %}
 {% block content %}
-<h2>Sources</h2>
 
-<div class="card">
-  <h3 style="margin-top:0;">Add a source</h3>
-  <form method="post" action="{{ url_for('add_source') }}" style="display:grid; grid-template-columns: 1fr 2fr auto auto; gap:0.6rem; align-items:end;">
-    <div><label>Name</label><input type="text" name="name" required></div>
-    <div><label>Feed URL</label><input type="url" name="url" placeholder="https://example.com/feed.xml" required></div>
-    <div><label><input type="checkbox" name="enabled" checked> Enabled</label></div>
-    <div><button type="submit">Add</button></div>
+<div class="page-head">
+  <h1>Sources</h1>
+  <p>The RSS/Atom feeds RSSPhaser polls. Disable one to pause it without losing it.</p>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h2>Add a source</h2></div>
+  <form method="post" action="{{ url_for('add_source') }}"
+        class="add-grid" style="grid-template-columns: 1.1fr 2fr auto auto;">
+    <label class="field"><span class="eyebrow">Name</span>
+      <input type="text" name="name" placeholder="The Hacker News" required></label>
+    <label class="field"><span class="eyebrow">Feed URL</span>
+      <input type="url" name="url" class="mono" placeholder="https://example.com/feed.xml" required></label>
+    <label class="toggle-field"><span class="toggle"><input type="checkbox" name="enabled" checked><span class="track"></span></span> Enabled</label>
+    <button type="submit">Add source</button>
   </form>
 </div>
 
-<div class="card">
+<div class="panel">
+  <div class="panel-head"><h2>Feeds</h2><span class="eyebrow">{{ sources|length }} total</span></div>
   <table>
-    <thead>
-      <tr><th>Name</th><th>URL</th><th>Enabled</th><th>Actions</th></tr>
-    </thead>
+    <thead><tr><th style="width:26%;">Name</th><th>URL</th><th style="width:90px;">Enabled</th><th style="text-align:right;">Actions</th></tr></thead>
     <tbody>
       {% for s in sources %}
-      <tr class="row-form">
+      <tr>
         <form method="post" action="{{ url_for('edit_source', source_id=s.id) }}">
           <td><input type="text" name="name" value="{{ s.name }}" required></td>
-          <td><input type="url" name="url" value="{{ s.url }}" required></td>
-          <td style="text-align:center;"><input type="checkbox" name="enabled" {% if s.enabled %}checked{% endif %}></td>
-          <td style="white-space:nowrap;">
-            <button type="submit" class="secondary">Save</button>
+          <td><input type="url" name="url" class="mono" value="{{ s.url }}" required></td>
+          <td><label class="toggle"><input type="checkbox" name="enabled" {{ 'checked' if s.enabled }}><span class="track"></span></label></td>
+          <td>
+            <div class="row-actions">
+              <button type="submit" class="ghost">Save</button>
         </form>
-            <form method="post" action="{{ url_for('delete_source', source_id=s.id) }}" class="inline"
-                  onsubmit="return confirm('Delete source {{ s.name }}?');">
-              <button type="submit" class="danger">Delete</button>
-            </form>
+              <form method="post" action="{{ url_for('delete_source', source_id=s.id) }}"
+                    onsubmit="return confirm('Delete source “{{ s.name }}”?');">
+                <button type="submit" class="link-danger">Delete</button>
+              </form>
+            </div>
           </td>
       </tr>
       {% else %}
-      <tr><td colspan="4" class="muted">No sources yet. Add one above.</td></tr>
+      <tr><td colspan="4" class="empty">No sources yet. Add one above.</td></tr>
       {% endfor %}
     </tbody>
   </table>

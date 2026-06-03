@@ -32,6 +32,7 @@ from .db import (
 )
 from .feed import build_feed_xml
 from .logging_config import configure_logging
+from .matching import MATCH_MODES, normalize_mode
 from .models import Keyword, Match, Source
 
 log = logging.getLogger("rssphaser.web")
@@ -95,16 +96,20 @@ def _register_routes(app: Flask, config: AppConfig) -> None:
         with get_session() as s:
             sources = list(s.scalars(select(Source).order_by(Source.name)).all())
             total_matches = s.scalar(select(func.count()).select_from(Match)) or 0
-            problematic = list(
-                s.scalars(select(Keyword).where(Keyword.problematic.is_(True))).all()
-            )
             keyword_count = s.scalar(select(func.count()).select_from(Keyword)) or 0
+            enabled_keywords = s.scalar(
+                select(func.count()).select_from(Keyword).where(Keyword.enabled.is_(True))
+            ) or 0
+            newest = s.scalar(select(func.max(Match.fetched_at)))
+        enabled_sources = sum(1 for x in sources if x.enabled)
         return render_template(
             "dashboard.html",
             sources=sources,
             total_matches=total_matches,
-            problematic=problematic,
             keyword_count=keyword_count,
+            enabled_keywords=enabled_keywords,
+            enabled_sources=enabled_sources,
+            newest_match=newest,
             poll_interval=get_poll_interval(config),
         )
 
@@ -172,30 +177,32 @@ def _register_routes(app: Flask, config: AppConfig) -> None:
     @login_required
     def keywords():
         with get_session() as s:
-            rows = list(s.scalars(select(Keyword).order_by(Keyword.pattern)).all())
-        return render_template("keywords.html", keywords=rows)
+            rows = list(s.scalars(select(Keyword).order_by(Keyword.term)).all())
+        return render_template("keywords.html", keywords=rows, modes=MATCH_MODES)
 
     @app.route("/keywords/add", methods=["POST"])
     @login_required
     def add_keyword():
-        pattern = (request.form.get("pattern") or "").strip()
+        term = (request.form.get("term") or "").strip()
+        mode = request.form.get("mode") or ""
         enabled = request.form.get("enabled") == "on"
-        err = _validate_regex(pattern)
+        err = _validate_keyword(term, mode)
         if err:
             flash(err, "error")
         else:
             with get_session() as s:
                 with s.begin():
-                    s.add(Keyword(pattern=pattern[:512], enabled=enabled))
+                    s.add(Keyword(term=term[:512], mode=normalize_mode(mode), enabled=enabled))
             flash("Keyword added.", "success")
         return redirect(url_for("keywords"))
 
     @app.route("/keywords/<int:keyword_id>/edit", methods=["POST"])
     @login_required
     def edit_keyword(keyword_id: int):
-        pattern = (request.form.get("pattern") or "").strip()
+        term = (request.form.get("term") or "").strip()
+        mode = request.form.get("mode") or ""
         enabled = request.form.get("enabled") == "on"
-        err = _validate_regex(pattern)
+        err = _validate_keyword(term, mode)
         if err:
             flash(err, "error")
         else:
@@ -205,11 +212,9 @@ def _register_routes(app: Flask, config: AppConfig) -> None:
                     if kw is None:
                         flash("Keyword not found.", "error")
                     else:
-                        kw.pattern = pattern[:512]
+                        kw.term = term[:512]
+                        kw.mode = normalize_mode(mode)
                         kw.enabled = enabled
-                        # Editing clears the problematic flag so it can be re-evaluated.
-                        kw.problematic = False
-                        kw.problem_note = None
                         flash("Keyword updated.", "success")
         return redirect(url_for("keywords"))
 
@@ -268,14 +273,12 @@ def _register_routes(app: Flask, config: AppConfig) -> None:
             return Response(f"db error: {exc}", status=503, mimetype="text/plain")
 
 
-def _validate_regex(pattern: str) -> str | None:
-    """Return an error message if the pattern is empty or doesn't compile."""
-    if not pattern:
-        return "Pattern is required."
-    if len(pattern) > 512:
-        return "Pattern is too long (max 512 characters)."
-    try:
-        re.compile(pattern)
-    except re.error as exc:
-        return f"Invalid regular expression: {exc}"
+def _validate_keyword(term: str, mode: str) -> str | None:
+    """Return an error message if the keyword term or mode is invalid."""
+    if not term:
+        return "Keyword is required."
+    if len(term) > 512:
+        return "Keyword is too long (max 512 characters)."
+    if mode not in MATCH_MODES:
+        return f"Match mode must be one of: {', '.join(MATCH_MODES)}."
     return None

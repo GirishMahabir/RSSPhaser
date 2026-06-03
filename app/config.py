@@ -13,11 +13,12 @@ rather than half-booting.
 from __future__ import annotations
 
 import os
-import re
 from dataclasses import dataclass, field
 from typing import Any
 
 import yaml
+
+from .matching import MATCH_MODES, normalize_mode
 
 
 class ConfigError(Exception):
@@ -33,7 +34,8 @@ class SourceSeed:
 
 @dataclass
 class KeywordSeed:
-    pattern: str
+    term: str
+    mode: str = "word"
     enabled: bool = True
 
 
@@ -54,7 +56,6 @@ class AppConfig:
     # Operational tunables (config.yaml, env-overridable)
     poll_interval_minutes: int
     body_truncate_bytes: int
-    regex_timeout_seconds: float
     output_item_cap: int
     retention_max_matches: int
     retention_max_age_days: int
@@ -165,9 +166,6 @@ def load_config(config_path: str | None = None) -> AppConfig:
     body_truncate_bytes = _env_int(
         "BODY_TRUNCATE_BYTES", _yaml_int(raw, "body_truncate_bytes", 102400)
     )
-    regex_timeout_seconds = _env_float(
-        "REGEX_TIMEOUT_SECONDS", _yaml_float(raw, "regex_timeout_seconds", 2.0)
-    )
     output_item_cap = _env_int("OUTPUT_ITEM_CAP", _yaml_int(raw, "output_item_cap", 200))
     retention_max_matches = _env_int(
         "RETENTION_MAX_MATCHES", _yaml_int(raw, "retention_max_matches", 5000)
@@ -188,8 +186,6 @@ def load_config(config_path: str | None = None) -> AppConfig:
         raise ConfigError("poll_interval_minutes must be >= 1.")
     if body_truncate_bytes < 1024:
         raise ConfigError("body_truncate_bytes must be >= 1024.")
-    if regex_timeout_seconds <= 0:
-        raise ConfigError("regex_timeout_seconds must be > 0.")
     if output_item_cap < 1:
         raise ConfigError("output_item_cap must be >= 1.")
     if poll_max_workers < 1:
@@ -210,7 +206,6 @@ def load_config(config_path: str | None = None) -> AppConfig:
         db_password=db_password,
         poll_interval_minutes=poll_interval_minutes,
         body_truncate_bytes=body_truncate_bytes,
-        regex_timeout_seconds=regex_timeout_seconds,
         output_item_cap=output_item_cap,
         retention_max_matches=retention_max_matches,
         retention_max_age_days=retention_max_age_days,
@@ -247,13 +242,16 @@ def _parse_keyword_seeds(items: Any) -> list[KeywordSeed]:
     for i, item in enumerate(items):
         if not isinstance(item, dict):
             raise ConfigError(f"config.yaml: keywords[{i}] must be a mapping.")
-        pattern = item.get("pattern")
-        if not pattern or not isinstance(pattern, str):
-            raise ConfigError(f"config.yaml: keywords[{i}].pattern is required and must be a string.")
-        # Validate that the seed regex compiles; a broken seed should fail fast.
-        try:
-            re.compile(pattern)
-        except re.error as exc:
-            raise ConfigError(f"config.yaml: keywords[{i}].pattern is not a valid regex: {exc}") from exc
-        seeds.append(KeywordSeed(pattern=pattern, enabled=_as_bool(item.get("enabled"))))
+        # Accept "term" (preferred); fall back to legacy "pattern" key.
+        term = item.get("term", item.get("pattern"))
+        if not term or not isinstance(term, str):
+            raise ConfigError(f"config.yaml: keywords[{i}].term is required and must be a string.")
+        mode = item.get("mode", "word")
+        if mode not in MATCH_MODES:
+            raise ConfigError(
+                f"config.yaml: keywords[{i}].mode must be one of {MATCH_MODES}, got {mode!r}."
+            )
+        seeds.append(
+            KeywordSeed(term=term.strip(), mode=normalize_mode(mode), enabled=_as_bool(item.get("enabled")))
+        )
     return seeds

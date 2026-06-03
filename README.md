@@ -1,7 +1,7 @@
 # 🛰️ RSSPhaser
 
 A self-contained RSS/Atom **keyword filter**. It polls a list of noisy security
-feeds on a schedule, keeps only the entries that match your regex keyword list,
+feeds on a schedule, keeps only the entries that match your keyword list,
 stores the matches in MariaDB, and re-serves them as a single clean RSS 2.0 feed
 you can subscribe to in any reader.
 
@@ -54,29 +54,30 @@ from `config.yaml`.
 ```
 
 ### Matching logic
-- Keywords are **Python regular expressions**, matched **case-insensitively**.
-- For each entry the **title is checked first**. If any pattern matches the
-  title, the entry is kept and the body is not checked. Otherwise the
+- Keywords are **plain literal terms — no regular expressions** — matched
+  **case-insensitively**. There is deliberately no regex engine in the matching
+  path, so catastrophic backtracking / ReDoS is impossible by construction:
+  matching is linear-time and can never hang, no matter what an admin types.
+- Each keyword has a **mode**:
+  - **`word`** (default) — whole-word match. The term must be bounded by a
+    non-alphanumeric character (or a string edge) on both ends. `ai` matches the
+    standalone word "ai" but not "em**ai**l". Works for multi-word terms too
+    (`data breach` matches "a data breach." but not "meta**data breach**y").
+  - **`contains`** — plain substring; matches inside larger words. Ideal for
+    prefixes like `CVE-`, which catches every advisory number with one keyword.
+- For each entry the **title is checked first**. If any keyword matches the
+  title, the entry is kept and the body isn't checked. Otherwise the
   **body/summary** is checked. A match in either stage keeps the entry.
 - The body is **truncated** (default 100 KB, `BODY_TRUNCATE_BYTES`) before
-  matching so a huge payload can't blow up evaluation.
-- Every regex evaluation runs under a **hard per-pattern timeout** (default 2 s,
-  `REGEX_TIMEOUT_SECONDS`) in a worker thread. See below.
+  matching, purely to bound memory on pathologically large payloads.
 
-### Regex timeout & "problematic" keywords
-Two independent safeguards protect against bad regexes:
-
-1. **Validate-on-save** — the UI rejects any pattern that doesn't compile, so
-   typos never reach the database.
-2. **Runtime timeout** — even a valid pattern can cause *catastrophic
-   backtracking* on certain input. Each evaluation runs in a worker thread with
-   a hard timeout; if a pattern exceeds it, that pattern is **skipped for that
-   entry**, the event is logged, and the keyword is flagged
-   **"problematic"** in the dashboard. A pattern that fails to compile at poll
-   time (e.g. a stored row gone bad) is flagged the same way and never crashes
-   polling.
-
-Editing a problematic keyword clears the flag so it can be re-evaluated.
+> **Why no regex?** Regex gave power we didn't need (you almost never need
+> backreferences to filter security headlines) at the cost of a real stability
+> risk — a single bad pattern can pin a CPU for an exponential amount of time.
+> Literal keyword modes cover essentially every real filtering need with zero
+> attack surface. Translating the classic patterns is easy: `CVE-\d{4}-\d{4,7}`
+> → `CVE-` (contains); `critical (vulnerability|flaw|bug)` → three keywords;
+> `ransomware` → `ransomware` (word).
 
 ### Deduplication & retention
 - Each entry gets a stable **dedup id** (the entry's `id`/`guid`, else a hash of
@@ -101,17 +102,17 @@ re-seeding will never overwrite UI changes on later boots.
 Dashboard → **Sources**. Add/edit/delete feed URLs and toggle each one enabled.
 
 ### Keywords
-Dashboard → **Keywords**. Add/edit/delete regex patterns and toggle enabled.
-Invalid regexes are rejected on save with a clear error.
+**Keywords** page. Add/edit/delete literal keywords, choose a match mode
+(`whole word` or `contains`), and toggle each enabled.
 
 ### Poll interval
-Dashboard → **Poll interval**. Change the minutes between polls; the scheduler
+**Overview** → **Polling**. Change the minutes between polls; the scheduler
 picks up the change within ~30 seconds — **no restart required**.
 
 ### Dashboard / status
 Per-source last poll time, last-run duration, success/error state, last error
-message and last match count; total matches stored; and any problematic
-keywords.
+message and last match count; plus totals for matches stored and active
+sources/keywords.
 
 ---
 
@@ -149,7 +150,6 @@ matching env var.
 | DB host/port/name/user/pass | `DB_*` | — | see `.env.example` |
 | Poll interval (min) | `POLL_INTERVAL_MINUTES` | `poll_interval_minutes` | 15 |
 | Body truncation (bytes) | `BODY_TRUNCATE_BYTES` | `body_truncate_bytes` | 102400 |
-| Regex timeout (s) | `REGEX_TIMEOUT_SECONDS` | `regex_timeout_seconds` | 2.0 |
 | Output item cap | `OUTPUT_ITEM_CAP` | `output_item_cap` | 200 |
 | Retention max matches | `RETENTION_MAX_MATCHES` | `retention_max_matches` | 5000 |
 | Retention max age (days) | `RETENTION_MAX_AGE_DAYS` | `retention_max_age_days` | 90 |
