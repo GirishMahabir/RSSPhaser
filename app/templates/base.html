@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}RSSPhaser{% endblock %}</title>
+  <style>
+    :root{
+      --paper:#f5f3ee; --surface:#fcfbf8; --ink:#1c1b18; --ink-soft:#46443e;
+      --muted:#8a857b; --line:#e6e0d4; --line-strong:#d9d2c3;
+      --accent:#b8502e; --accent-soft:#f1e4dc; --accent-ink:#9a3f22;
+      --ok:#3f7d52; --warn:#b07d2b; --danger:#a8392b;
+      --serif:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif;
+      --sans:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+      --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+      --radius:7px;
+    }
+    *{box-sizing:border-box}
+    html{-webkit-text-size-adjust:100%}
+    body{
+      margin:0; background:var(--paper); color:var(--ink);
+      font-family:var(--sans); font-size:15px; line-height:1.55;
+      font-feature-settings:"kern","liga","cv05";
+      -webkit-font-smoothing:antialiased;
+    }
+    a{color:var(--accent-ink); text-decoration:none}
+    a:hover{text-decoration:underline; text-underline-offset:2px}
+    h1,h2,h3{font-family:var(--serif); font-weight:600; letter-spacing:-.01em; color:var(--ink)}
+
+    /* micro label */
+    .eyebrow{font-size:11px; letter-spacing:.13em; text-transform:uppercase;
+      color:var(--muted); font-weight:600}
+
+    /* ---------- top bar ---------- */
+    .topbar{border-bottom:1px solid var(--line-strong); background:var(--paper)}
+    .topbar-inner{max-width:1060px; margin:0 auto; padding:0 24px; height:62px;
+      display:flex; align-items:center; gap:30px}
+    .brand{display:flex; align-items:center; gap:10px; color:var(--ink)}
+    .brand:hover{text-decoration:none}
+    .brand .mark{color:var(--accent); display:flex}
+    .brand .name{font-family:var(--serif); font-size:20px; font-weight:600; letter-spacing:-.015em}
+    .brand .name b{font-weight:600}
+    nav.main{display:flex; gap:26px; margin-left:8px}
+    nav.main a{color:var(--ink-soft); font-size:14px; padding:21px 0; position:relative}
+    nav.main a:hover{color:var(--ink); text-decoration:none}
+    nav.main a.active{color:var(--ink)}
+    nav.main a.active::after{content:""; position:absolute; left:0; right:0; bottom:-1px;
+      height:2px; background:var(--accent)}
+    .topbar .spacer{flex:1}
+    .topbar .signout{font-size:13px; color:var(--muted)}
+
+    /* ---------- layout ---------- */
+    main{max-width:1060px; margin:0 auto; padding:38px 24px 80px}
+    .page-head{margin:0 0 26px}
+    .page-head h1{font-size:30px; margin:0 0 4px}
+    .page-head p{margin:0; color:var(--muted); font-size:14.5px}
+
+    .panel{background:var(--surface); border:1px solid var(--line);
+      border-radius:var(--radius); padding:22px 24px; margin-bottom:22px}
+    .panel-head{display:flex; align-items:baseline; justify-content:space-between; gap:16px; margin-bottom:14px}
+    .panel-head h2{font-size:17px; margin:0}
+    .panel-head .eyebrow{margin:0}
+
+    /* ---------- metrics strip ---------- */
+    .metrics{display:flex; flex-wrap:wrap; background:var(--surface);
+      border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; margin-bottom:22px}
+    .metric{flex:1 1 0; min-width:150px; padding:20px 24px; border-left:1px solid var(--line)}
+    .metric:first-child{border-left:none}
+    .metric .num{font-family:var(--serif); font-size:32px; line-height:1; color:var(--ink);
+      font-feature-settings:"tnum"}
+    .metric .num small{font-size:16px; color:var(--muted)}
+    .metric .lbl{margin-top:8px}
+
+    /* ---------- tables ---------- */
+    table{width:100%; border-collapse:collapse}
+    thead th{font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted);
+      font-weight:600; text-align:left; padding:0 14px 10px; border-bottom:1px solid var(--line-strong)}
+    tbody td{padding:13px 14px; border-bottom:1px solid var(--line); vertical-align:middle; font-size:14px}
+    tbody tr:last-child td{border-bottom:none}
+    tbody tr:hover{background:#faf7f1}
+    td.tech, .mono{font-family:var(--mono); font-size:12.5px}
+    td .sub{color:var(--muted); font-size:12px; font-family:var(--mono);
+      max-width:340px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+    .num-cell{font-family:var(--mono); font-feature-settings:"tnum"}
+
+    /* ---------- status dot ---------- */
+    .dot{display:inline-flex; align-items:center; gap:7px; font-size:13px; color:var(--ink-soft)}
+    .dot::before{content:""; width:7px; height:7px; border-radius:50%; background:var(--muted)}
+    .dot.ok::before{background:var(--ok)} .dot.err::before{background:var(--danger)}
+    .dot.idle::before{background:var(--line-strong)} .dot.skip::before{background:var(--warn)}
+
+    /* ---------- badges ---------- */
+    .badge{display:inline-block; font-size:11px; font-weight:600; letter-spacing:.04em;
+      padding:3px 8px; border-radius:999px; border:1px solid var(--line-strong); color:var(--ink-soft); background:#fff}
+    .badge.accent{color:var(--accent-ink); border-color:var(--accent-soft); background:var(--accent-soft)}
+    .badge.off{color:var(--muted)}
+
+    /* ---------- forms ---------- */
+    label.field{display:block}
+    label.field .eyebrow{display:block; margin-bottom:6px}
+    input[type=text],input[type=url],input[type=password],input[type=number],select{
+      width:100%; padding:9px 11px; font-family:inherit; font-size:14px; color:var(--ink);
+      background:#fff; border:1px solid var(--line-strong); border-radius:6px; outline:none;
+      transition:border-color .12s, box-shadow .12s}
+    input.mono{font-family:var(--mono); font-size:13px}
+    input:focus,select:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft)}
+    select{appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238a857b' fill='none' stroke-width='1.4'/%3E%3C/svg%3E");
+      background-repeat:no-repeat; background-position:right 11px center; padding-right:30px}
+
+    /* toggle switch (styled checkbox) */
+    .toggle-form{margin:0; display:inline-flex}
+    .toggle{position:relative; display:inline-block; width:38px; height:22px; flex:none}
+    .toggle input{opacity:0; width:0; height:0; position:absolute}
+    .toggle .track{position:absolute; inset:0; background:var(--line-strong); border-radius:999px; transition:.16s}
+    .toggle .track::before{content:""; position:absolute; width:16px; height:16px; left:3px; top:3px;
+      background:#fff; border-radius:50%; transition:.16s; box-shadow:0 1px 2px rgba(0,0,0,.2)}
+    .toggle input:checked + .track{background:var(--accent)}
+    .toggle input:checked + .track::before{transform:translateX(16px)}
+    .toggle input:focus-visible + .track{box-shadow:0 0 0 3px var(--accent-soft)}
+
+    /* buttons */
+    button,.btn{font-family:inherit; font-size:13.5px; font-weight:600; letter-spacing:.01em;
+      padding:9px 16px; border-radius:6px; border:1px solid transparent; cursor:pointer;
+      background:var(--ink); color:var(--paper); transition:.12s}
+    button:hover,.btn:hover{background:#000; text-decoration:none}
+    button.ghost{background:transparent; color:var(--ink-soft); border-color:var(--line-strong)}
+    button.ghost:hover{background:#fff; color:var(--ink)}
+    button.link-danger{background:transparent; color:var(--danger); border:none; padding:9px 10px; font-weight:600}
+    button.link-danger:hover{background:transparent; text-decoration:underline; text-underline-offset:2px}
+    .row-actions{display:flex; gap:4px; justify-content:flex-end; align-items:center; white-space:nowrap}
+
+    /* inline add/edit rows */
+    .add-grid{display:grid; gap:14px; align-items:end}
+    .toggle-field{display:flex; align-items:center; gap:9px; font-size:13.5px; color:var(--ink-soft)}
+
+    /* flash */
+    .flash{display:flex; gap:10px; align-items:flex-start; padding:11px 15px; margin-bottom:14px;
+      border:1px solid var(--line); border-left-width:3px; border-radius:6px; background:var(--surface); font-size:14px}
+    .flash.error{border-left-color:var(--danger)}
+    .flash.success{border-left-color:var(--ok)}
+
+    /* subscribe callout */
+    .subscribe{display:flex; align-items:center; gap:14px; flex-wrap:wrap}
+    .subscribe code{font-family:var(--mono); font-size:13px; background:#fff; border:1px solid var(--line-strong);
+      padding:8px 12px; border-radius:6px; color:var(--accent-ink)}
+    .hint{color:var(--muted); font-size:13px}
+    .empty{color:var(--muted); font-size:14px; padding:18px 4px}
+    code.inline{font-family:var(--mono); font-size:12.5px; background:#fff; border:1px solid var(--line);
+      padding:1px 5px; border-radius:4px}
+  </style>
+</head>
+<body>
+  {% if session.get('authenticated') %}
+  <div class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="{{ url_for('dashboard') }}">
+        <span class="mark">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.7" stroke-linecap="round">
+            <circle cx="6.5" cy="17.5" r="1.7" fill="currentColor" stroke="none"/>
+            <path d="M6.5 12.5a5 5 0 0 1 5 5"/>
+            <path d="M6.5 7.5a10 10 0 0 1 10 10"/>
+          </svg>
+        </span>
+        <span class="name">RSS<b>Phaser</b></span>
+      </a>
+      <nav class="main">
+        <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint=='dashboard' }}">Overview</a>
+        <a href="{{ url_for('sources') }}" class="{{ 'active' if request.endpoint=='sources' }}">Sources</a>
+        <a href="{{ url_for('keywords') }}" class="{{ 'active' if request.endpoint=='keywords' }}">Keywords</a>
+        <a href="{{ url_for('feed_xml') }}">Feed&nbsp;↗</a>
+      </nav>
+      <span class="spacer"></span>
+      <a class="signout" href="{{ url_for('logout') }}">Sign out</a>
+    </div>
+  </div>
+  {% endif %}
+
+  <main>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="flash {{ category }}"><span>{{ message }}</span></div>
+      {% endfor %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <script>
+    // Save enable/disable toggles in place.
+    function rpSaveToggle(box){
+      var form = box.closest('form.toggle-form');
+      if(!form || box.dataset.saving === '1'){ return; }
+
+      var previous = !box.checked;
+      var scrollX = window.scrollX;
+      var scrollY = window.scrollY;
+      var formData = new FormData(form);
+      box.dataset.saving = '1';
+      box.disabled = true;
+
+      fetch(form.action, {
+        method: 'POST',
+        body: formData,
+        headers: {'X-Requested-With': 'fetch'},
+        credentials: 'same-origin'
+      })
+        .then(function(r){
+          if(!(r.ok || r.status === 204)){
+            box.checked = previous;
+            alert('Could not save the change.');
+          }
+        })
+        .catch(function(){
+          box.checked = previous;
+          alert('Could not save the change.');
+        })
+        .finally(function(){
+          delete box.dataset.saving;
+          box.disabled = false;
+          window.scrollTo(scrollX, scrollY);
+        });
+    }
+
+    document.addEventListener('change', function(event){
+      var box = event.target.closest('.toggle-form input[type="checkbox"]');
+      if(box){ rpSaveToggle(box); }
+    });
+
+    document.addEventListener('submit', function(event){
+      var form = event.target.closest('form.toggle-form');
+      if(!form){ return; }
+      event.preventDefault();
+      var box = form.querySelector('input[type="checkbox"]');
+      if(box){ rpSaveToggle(box); }
+    });
+
+    function rpSubmitInPlace(form){
+      var submitter = form.querySelector('button[type="submit"], input[type="submit"]');
+      var scrollX = window.scrollX;
+      var scrollY = window.scrollY;
+      if(submitter){ submitter.disabled = true; }
+
+      return fetch(form.action, {
+        method: 'POST',
+        body: new FormData(form),
+        headers: {'X-Requested-With': 'fetch'},
+        credentials: 'same-origin'
+      })
+        .then(function(r){
+          if(!(r.ok || r.status === 204)){
+            throw new Error('Request failed');
+          }
+          return r;
+        })
+        .finally(function(){
+          if(submitter){ submitter.disabled = false; }
+          window.scrollTo(scrollX, scrollY);
+        });
+    }
+
+    document.addEventListener('submit', function(event){
+      var form = event.target.closest('form.ajax-row-form, form.ajax-delete-form');
+      if(!form || event.defaultPrevented){ return; }
+      event.preventDefault();
+
+      rpSubmitInPlace(form)
+        .then(function(){
+          if(form.classList.contains('ajax-delete-form')){
+            var row = form.closest('tr');
+            if(row){ row.remove(); }
+            var countLabel = document.querySelector('[data-count-label]');
+            if(countLabel){
+              var count = parseInt(countLabel.textContent, 10);
+              if(!isNaN(count)){ countLabel.textContent = Math.max(0, count - 1) + ' total'; }
+            }
+          }
+        })
+        .catch(function(){
+          alert('Could not save the change.');
+        });
+    });
+  </script>
+</body>
+</html>

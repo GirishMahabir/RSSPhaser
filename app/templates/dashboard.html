@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Overview — RSSPhaser{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <h1>Overview</h1>
+  <p>Polling status and what's flowing into your filtered feed.</p>
+</div>
+
+<div class="metrics">
+  <div class="metric">
+    <div class="num">{{ total_matches }}</div>
+    <div class="lbl eyebrow">Matches stored · {{ store_size }}</div>
+  </div>
+  <div class="metric">
+    <div class="num">{{ enabled_sources }}<small> / {{ sources|length }}</small></div>
+    <div class="lbl eyebrow">Sources active</div>
+  </div>
+  <div class="metric">
+    <div class="num">{{ enabled_keywords }}<small> / {{ keyword_count }}</small></div>
+    <div class="lbl eyebrow">Keywords active</div>
+  </div>
+  <div class="metric">
+    <div class="num" style="font-size:20px; padding-top:8px;">
+      {{ newest_match.strftime('%b %d, %H:%M') if newest_match else '—' }}
+    </div>
+    <div class="lbl eyebrow">Newest match (UTC)</div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h2>Your filtered feed</h2><span class="eyebrow">Public · no auth</span></div>
+  <div class="subscribe">
+    <code id="feedurl">{{ request.url_root }}feed.xml</code>
+    <a class="btn ghost" href="{{ url_for('feed_xml') }}" style="text-decoration:none;">Open feed ↗</a>
+    <span class="hint">Subscribe to this URL in any RSS reader.</span>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h2>Polling</h2><span class="eyebrow">Applies within ~30s</span></div>
+  <form method="post" action="{{ url_for('update_interval') }}"
+        style="display:flex; gap:12px; align-items:flex-end;">
+    <label class="field" style="max-width:200px;">
+      <span class="eyebrow">Interval (minutes)</span>
+      <input type="number" name="poll_interval_minutes" min="1" value="{{ poll_interval }}" class="mono">
+    </label>
+    <button type="submit">Save interval</button>
+    <span class="hint" style="padding-bottom:9px;">No restart required.</span>
+  </form>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h2>Retention</h2><span class="eyebrow">Keeps the database bounded</span></div>
+  <form method="post" action="{{ url_for('update_retention') }}"
+        style="display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap;">
+    <label class="field" style="max-width:190px;">
+      <span class="eyebrow">Max items to keep</span>
+      <input type="number" name="retention_max_matches" min="0" value="{{ retention_max_matches }}" class="mono">
+    </label>
+    <label class="field" style="max-width:190px;">
+      <span class="eyebrow">Max age (days)</span>
+      <input type="number" name="retention_max_age_days" min="0" value="{{ retention_max_age_days }}" class="mono">
+    </label>
+    <button type="submit">Save limits</button>
+    <span class="hint" style="padding-bottom:9px;">0 = unlimited. Cleanup runs automatically after each poll.</span>
+  </form>
+  <div style="margin-top:16px; padding-top:15px; border-top:1px solid var(--line);
+              display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+    <form method="post" action="{{ url_for('prune_now') }}"><button type="submit" class="ghost">Run cleanup now</button></form>
+    <span class="hint">Currently storing <b>{{ total_matches }}</b> items · <b>{{ store_size }}</b> on disk.</span>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h2>Sources</h2><span class="eyebrow">Last poll per source</span></div>
+  <table>
+    <thead>
+      <tr><th>Source</th><th>Status</th><th>Last poll</th><th style="text-align:right;">Duration</th>
+          <th style="text-align:right;">New</th><th>Detail</th></tr>
+    </thead>
+    <tbody>
+      {% for s in sources %}
+      <tr>
+        <td>
+          <div>{{ s.name }}{% if not s.enabled %} <span class="badge off">disabled</span>{% endif %}</div>
+          <div class="sub">{{ s.url }}</div>
+        </td>
+        <td>
+          {% if s.last_status == 'ok' %}<span class="dot ok">ok</span>
+          {% elif s.last_status == 'not_modified' %}<span class="dot skip">no change</span>
+          {% elif s.last_status == 'error' %}<span class="dot err">error</span>
+          {% else %}<span class="dot idle">never</span>{% endif %}
+        </td>
+        <td class="num-cell" style="color:var(--ink-soft);">
+          {{ s.last_poll_at.strftime('%b %d %H:%M') if s.last_poll_at else '—' }}
+        </td>
+        <td class="num-cell" style="text-align:right; color:var(--muted);">
+          {{ (s.last_duration_ms ~ ' ms') if s.last_duration_ms is not none else '—' }}
+        </td>
+        <td class="num-cell" style="text-align:right;">{{ s.last_match_count }}</td>
+        <td class="sub" title="{{ s.last_error or '' }}">{{ s.last_error or '—' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty">No sources yet — add some on the Sources page.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Keywords — RSSPhaser{% endblock %}
+{% block content %}
+
+<div class="page-head">
+  <h1>Keywords</h1>
+  <p>Plain keywords — no regular expressions. An entry is kept if any keyword matches its title or body.</p>
+</div>
+
+<div class="panel" style="padding-top:18px; padding-bottom:18px;">
+  <div style="display:flex; gap:28px; flex-wrap:wrap;">
+    <div style="flex:1; min-width:240px;">
+      <span class="badge accent">whole word</span>
+      <p class="hint" style="margin:8px 0 0;">Matches the term only as a standalone word.
+        <code class="inline">ai</code> won't match “em<b>ai</b>l”. Best default — keeps the noise out.</p>
+    </div>
+    <div style="flex:1; min-width:240px;">
+      <span class="badge">contains</span>
+      <p class="hint" style="margin:8px 0 0;">Plain substring, matches inside words too.
+        Use it for prefixes like <code class="inline">CVE-</code> to catch every advisory number.</p>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h2>Add a keyword</h2></div>
+  <form method="post" action="{{ url_for('add_keyword') }}"
+        class="add-grid" style="grid-template-columns: 2fr 180px auto auto;">
+    <label class="field"><span class="eyebrow">Keyword</span>
+      <input type="text" name="term" class="mono" placeholder="ransomware" required></label>
+    <label class="field"><span class="eyebrow">Match mode</span>
+      <select name="mode">
+        {% for m in modes %}<option value="{{ m }}" {{ 'selected' if m=='word' }}>{{ 'whole word' if m=='word' else m }}</option>{% endfor %}
+      </select></label>
+    <label class="toggle-field"><span class="toggle"><input type="checkbox" name="enabled" checked><span class="track"></span></span> Enabled</label>
+    <button type="submit">Add keyword</button>
+  </form>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h2>Keywords</h2><span class="eyebrow" data-count-label>{{ keywords|length }} total</span></div>
+  <table>
+    <thead><tr><th style="width:42%;">Keyword</th><th style="width:180px;">Mode</th><th style="width:90px;">Enabled</th><th style="text-align:right;">Actions</th></tr></thead>
+    <tbody>
+      {% for k in keywords %}
+      <tr>
+        <td><input type="text" name="term" class="mono" form="ekw{{ k.id }}" value="{{ k.term }}" required></td>
+        <td>
+          <select name="mode" form="ekw{{ k.id }}">
+            {% for m in modes %}<option value="{{ m }}" {{ 'selected' if m==k.mode }}>{{ 'whole word' if m=='word' else m }}</option>{% endfor %}
+          </select>
+        </td>
+        <td>
+          {# Toggling saves immediately — its own form, auto-submitted on change. #}
+          <form method="post" action="{{ url_for('toggle_keyword', keyword_id=k.id) }}" class="toggle-form">
+            <label class="toggle"><input type="checkbox" name="enabled" value="on" {{ 'checked' if k.enabled }}
+                   aria-label="Enable keyword"><span class="track"></span></label>
+            <input type="hidden" name="enabled" value="off">
+          </form>
+        </td>
+        <td>
+          <div class="row-actions">
+            {# Empty edit form; the term/mode inputs + Save button bind to it by id. #}
+            <form method="post" action="{{ url_for('edit_keyword', keyword_id=k.id) }}" id="ekw{{ k.id }}" class="ajax-row-form"></form>
+            <button type="submit" form="ekw{{ k.id }}" class="ghost">Save</button>
+            <form method="post" action="{{ url_for('delete_keyword', keyword_id=k.id) }}"
+                  class="ajax-delete-form"
+                  onsubmit="return confirm('Delete this keyword?');">
+              <button type="submit" class="link-danger">Delete</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="empty">No keywords yet. Add one above.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+

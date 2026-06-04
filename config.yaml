@@ -1,0 +1,71 @@
+# RSSPhaser configuration.
+#
+# This file is read ONLY on the FIRST boot (when the database has not yet been
+# initialized). It seeds the initial sources, keywords and default poll
+# interval. After the first boot, the web UI becomes the source of truth and
+# edits persist to MariaDB; this file is no longer consulted for those values.
+#
+# Operational tunables (timeouts, caps, retention) below ARE read on every
+# boot, but each can be overridden by an environment variable (see .env.example).
+
+# Default poll interval in minutes (seeded into DB on first boot).
+poll_interval_minutes: 15
+
+# Maximum number of bytes of an entry's body to keep in memory while matching.
+# Protects against pathologically large payloads. Default 100 KB.
+body_truncate_bytes: 102400
+
+# Maximum number of items served in the output /feed.xml feed (newest first).
+output_item_cap: 200
+
+# Retention: prune matches beyond this count (keep the newest N), and/or older
+# than this many days. Set either to 0 to disable that dimension.
+retention_max_matches: 5000
+retention_max_age_days: 90
+
+# HTTP fetch tuning for polling.
+http_connect_timeout_seconds: 10
+http_read_timeout_seconds: 20
+http_max_retries: 3
+poll_max_workers: 5
+
+# Initial feed sources (seeded on first boot only).
+sources:
+  - name: "The Hacker News"
+    url: "https://feeds.feedburner.com/TheHackersNews"
+    enabled: true
+  - name: "BleepingComputer"
+    url: "https://www.bleepingcomputer.com/feed/"
+    enabled: true
+  - name: "Krebs on Security"
+    url: "https://krebsonsecurity.com/feed/"
+    enabled: true
+  - name: "Schneier on Security"
+    url: "https://www.schneier.com/feed/atom/"
+    enabled: true
+  - name: "US-CERT CISA Alerts"
+    url: "https://www.cisa.gov/cybersecurity-advisories/all.xml"
+    enabled: true
+
+# Initial keywords (seeded on first boot only). Case-insensitive. No regex.
+#   mode: "word"     -> whole-word match (precise; avoids false positives)
+#   mode: "contains" -> substring match (good for prefixes like "CVE-")
+keywords:
+  - term: "ransomware"
+    mode: "word"
+    enabled: true
+  - term: "zero-day"
+    mode: "word"
+    enabled: true
+  - term: "data breach"
+    mode: "word"
+    enabled: true
+  - term: "CVE-"
+    mode: "contains"
+    enabled: true
+  - term: "exploit"
+    mode: "word"
+    enabled: true
+  - term: "vulnerability"
+    mode: "word"
+    enabled: true
