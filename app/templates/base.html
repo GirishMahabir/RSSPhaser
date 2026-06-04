@@ -184,5 +184,18 @@
     {% endwith %}
     {% block content %}{% endblock %}
   </main>
+
+  <script>
+    // Save enable/disable toggles in place (no page reload / scroll jump).
+    function rpToggle(box){
+      var form = box.closest('form');
+      if(!form){ return; }
+      fetch(form.action, {method:'POST', headers:{'X-Requested-With':'fetch'}, credentials:'same-origin'})
+        .then(function(r){
+          if(!(r.ok || r.status === 204)){ box.checked = !box.checked; alert('Could not save the change.'); }
+        })
+        .catch(function(){ box.checked = !box.checked; alert('Could not save the change.'); });
+    }
+  </script>
 </body>
 </html>

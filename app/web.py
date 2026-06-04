@@ -177,6 +177,9 @@ def _register_routes(app: Flask, config: AppConfig) -> None:
                 src = s.get(Source, source_id)
                 if src is not None:
                     src.enabled = not src.enabled
+        # AJAX toggle => no-content (page stays put); plain POST => redirect.
+        if request.headers.get("X-Requested-With") == "fetch":
+            return ("", 204)
         return redirect(url_for("sources"))
 
     @app.route("/sources/<int:source_id>/delete", methods=["POST"])
@@ -244,6 +247,9 @@ def _register_routes(app: Flask, config: AppConfig) -> None:
                 kw = s.get(Keyword, keyword_id)
                 if kw is not None:
                     kw.enabled = not kw.enabled
+        # AJAX toggle => no-content (page stays put); plain POST => redirect.
+        if request.headers.get("X-Requested-With") == "fetch":
+            return ("", 204)
         return redirect(url_for("keywords"))
 
     @app.route("/keywords/<int:keyword_id>/delete", methods=["POST"])

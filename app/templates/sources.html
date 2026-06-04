@@ -33,7 +33,7 @@
           {# Toggling saves immediately — its own form, auto-submitted on change. #}
           <form method="post" action="{{ url_for('toggle_source', source_id=s.id) }}" class="toggle-form">
             <label class="toggle"><input type="checkbox" {{ 'checked' if s.enabled }}
-                   onchange="this.form.submit()" aria-label="Enable source"><span class="track"></span></label>
+                   onchange="rpToggle(this)" aria-label="Enable source"><span class="track"></span></label>
           </form>
         </td>
         <td>

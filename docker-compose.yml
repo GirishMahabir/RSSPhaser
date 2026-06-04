@@ -37,6 +37,10 @@ services:
     environment:
       # Ensure DB_HOST points at the compose service regardless of .env value.
       DB_HOST: db
+    volumes:
+      # Mount config.yaml from the host so edits apply on restart (no rebuild).
+      # Read-only: the app only ever reads it.
+      - ./config.yaml:/app/config.yaml:ro
     depends_on:
       db:
         condition: service_healthy
@@ -55,6 +59,9 @@ services:
     env_file: .env
     environment:
       DB_HOST: db
+    volumes:
+      # Same config.yaml mount as the app so both see host edits.
+      - ./config.yaml:/app/config.yaml:ro
     depends_on:
       db:
         condition: service_healthy
