@@ -25,15 +25,19 @@ from .auth import SESSION_KEY, check_login, login_required
 from .config import AppConfig, load_config
 from .db import (
     bootstrap,
+    get_matches_table_bytes,
     get_poll_interval,
+    get_retention,
     get_session,
     init_engine,
     set_poll_interval,
+    set_retention,
 )
 from .feed import build_feed_xml
 from .logging_config import configure_logging
 from .matching import MATCH_MODES, normalize_mode
 from .models import Keyword, Match, Source
+from .poller import prune_matches
 
 log = logging.getLogger("rssphaser.web")
 
@@ -102,6 +106,7 @@ def _register_routes(app: Flask, config: AppConfig) -> None:
             ) or 0
             newest = s.scalar(select(func.max(Match.fetched_at)))
         enabled_sources = sum(1 for x in sources if x.enabled)
+        max_matches, max_age_days = get_retention(config)
         return render_template(
             "dashboard.html",
             sources=sources,
@@ -111,6 +116,9 @@ def _register_routes(app: Flask, config: AppConfig) -> None:
             enabled_sources=enabled_sources,
             newest_match=newest,
             poll_interval=get_poll_interval(config),
+            retention_max_matches=max_matches,
+            retention_max_age_days=max_age_days,
+            store_size=_human_bytes(get_matches_table_bytes(config)),
         )
 
     # ---------------- Sources CRUD ----------------
@@ -270,6 +278,41 @@ def _register_routes(app: Flask, config: AppConfig) -> None:
         )
         return redirect(url_for("dashboard"))
 
+    # ---------------- Retention / cleanup ----------------
+    @app.route("/settings/retention", methods=["POST"])
+    @login_required
+    def update_retention():
+        def parse(name: str) -> int | None:
+            raw = request.form.get(name, "")
+            try:
+                v = int(raw)
+            except (TypeError, ValueError):
+                return None
+            return v if v >= 0 else None
+
+        max_matches = parse("retention_max_matches")
+        max_age_days = parse("retention_max_age_days")
+        if max_matches is None or max_age_days is None:
+            flash("Retention limits must be whole numbers ≥ 0 (0 = unlimited).", "error")
+            return redirect(url_for("dashboard"))
+        set_retention(max_matches, max_age_days)
+        flash(
+            "Retention limits saved. Cleanup runs automatically after each poll cycle.",
+            "success",
+        )
+        return redirect(url_for("dashboard"))
+
+    @app.route("/maintenance/prune", methods=["POST"])
+    @login_required
+    def prune_now():
+        try:
+            pruned = prune_matches(config)
+            flash(f"Cleanup complete — removed {pruned} old match(es).", "success")
+        except Exception as exc:  # noqa: BLE001
+            log.exception("Manual prune failed: %s", exc)
+            flash("Cleanup failed; see logs.", "error")
+        return redirect(url_for("dashboard"))
+
     # ---------------- Public output feed ----------------
     @app.route("/feed.xml")
     def feed_xml():
@@ -291,6 +334,18 @@ def _register_routes(app: Flask, config: AppConfig) -> None:
         except Exception as exc:  # noqa: BLE001
             log.warning("Health check failed: %s", exc)
             return Response(f"db error: {exc}", status=503, mimetype="text/plain")
+
+
+def _human_bytes(num: int | None) -> str:
+    """Render a byte count as a short human-readable string."""
+    if not num or num <= 0:
+        return "—"
+    value = float(num)
+    for unit in ("B", "KB", "MB", "GB"):
+        if value < 1024 or unit == "GB":
+            return f"{value:.0f} {unit}" if unit == "B" else f"{value:.1f} {unit}"
+        value /= 1024
+    return f"{value:.1f} GB"
 
 
 def _validate_keyword(term: str, mode: str) -> str | None:

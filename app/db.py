@@ -23,6 +23,8 @@ from .config import AppConfig
 from .models import (
     STATE_INITIALIZED,
     STATE_POLL_INTERVAL,
+    STATE_RETENTION_MAX_AGE_DAYS,
+    STATE_RETENTION_MAX_MATCHES,
     AppState,
     Base,
     Keyword,
@@ -98,27 +100,34 @@ def seed_if_needed(config: AppConfig) -> None:
             already = session.get(AppState, STATE_INITIALIZED)
             if already is not None:
                 log.info("DB already initialized; skipping config seed (UI is source of truth).")
-                # Ensure poll interval state row exists even on upgrades.
-                _ensure_poll_interval_row(session, config)
+                # Ensure settings rows exist even on upgrades from older versions.
+                _ensure_state_rows(session, config)
                 return
 
-            log.info("First boot: seeding sources/keywords/poll interval from config.yaml.")
+            log.info("First boot: seeding sources/keywords/settings from config.yaml.")
             for s in config.source_seeds:
                 session.add(Source(name=s.name, url=s.url, enabled=s.enabled))
             for k in config.keyword_seeds:
                 session.add(Keyword(term=k.term, mode=k.mode, enabled=k.enabled))
 
-            session.add(AppState(key=STATE_POLL_INTERVAL, value=str(config.poll_interval_minutes)))
             session.add(AppState(key=STATE_INITIALIZED, value="1"))
+            _ensure_state_rows(session, config)
         log.info(
             "Seed complete: %d sources, %d keywords.",
             len(config.source_seeds), len(config.keyword_seeds),
         )
 
 
-def _ensure_poll_interval_row(session: Session, config: AppConfig) -> None:
-    if session.get(AppState, STATE_POLL_INTERVAL) is None:
-        session.add(AppState(key=STATE_POLL_INTERVAL, value=str(config.poll_interval_minutes)))
+def _ensure_state_rows(session: Session, config: AppConfig) -> None:
+    """Create any missing settings rows from config defaults (idempotent)."""
+    defaults = {
+        STATE_POLL_INTERVAL: config.poll_interval_minutes,
+        STATE_RETENTION_MAX_MATCHES: config.retention_max_matches,
+        STATE_RETENTION_MAX_AGE_DAYS: config.retention_max_age_days,
+    }
+    for key, value in defaults.items():
+        if session.get(AppState, key) is None:
+            session.add(AppState(key=key, value=str(value)))
 
 
 def get_poll_interval(config: AppConfig) -> int:
@@ -144,6 +153,59 @@ def set_poll_interval(minutes: int) -> None:
 
 
 BOOTSTRAP_LOCK = "rssphaser_bootstrap"
+
+
+def _state_int(key: str, fallback: int) -> int:
+    """Read a non-negative int from app_state, falling back to ``fallback``."""
+    with get_session() as session:
+        row = session.get(AppState, key)
+        if row is not None:
+            try:
+                return max(0, int(row.value))
+            except ValueError:
+                pass
+    return fallback
+
+
+def get_retention(config: AppConfig) -> tuple[int, int]:
+    """Return live ``(max_matches, max_age_days)``; DB wins, config is fallback.
+
+    A value of 0 means "unlimited" for that dimension.
+    """
+    return (
+        _state_int(STATE_RETENTION_MAX_MATCHES, config.retention_max_matches),
+        _state_int(STATE_RETENTION_MAX_AGE_DAYS, config.retention_max_age_days),
+    )
+
+
+def set_retention(max_matches: int, max_age_days: int) -> None:
+    with get_session() as session:
+        with session.begin():
+            for key, value in (
+                (STATE_RETENTION_MAX_MATCHES, max_matches),
+                (STATE_RETENTION_MAX_AGE_DAYS, max_age_days),
+            ):
+                row = session.get(AppState, key)
+                if row is None:
+                    session.add(AppState(key=key, value=str(value)))
+                else:
+                    row.value = str(value)
+
+
+def get_matches_table_bytes(config: AppConfig) -> int | None:
+    """Best-effort on-disk size (data + indexes) of the matches table, in bytes."""
+    try:
+        with get_session() as session:
+            size = session.execute(
+                text(
+                    "SELECT data_length + index_length FROM information_schema.tables "
+                    "WHERE table_schema = :db AND table_name = 'matches'"
+                ),
+                {"db": config.db_name},
+            ).scalar()
+            return int(size) if size is not None else None
+    except Exception:  # noqa: BLE001 - size is informational only
+        return None
 
 
 def bootstrap(config: AppConfig) -> None:

@@ -25,7 +25,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.mysql import insert as mysql_insert
 
 from .config import AppConfig
-from .db import get_session
+from .db import get_retention, get_session
 from .matching import entry_matches
 from .models import Keyword, Match, Source
 
@@ -256,22 +256,23 @@ def _record_status(
 
 
 def prune_matches(config: AppConfig) -> int:
-    """Apply retention policy. Returns number of rows pruned."""
+    """Apply the live retention policy (DB-backed, UI-editable). Returns rows pruned."""
+    max_matches, max_age_days = get_retention(config)
     pruned = 0
     with get_session() as session:
         with session.begin():
             # Age-based pruning.
-            if config.retention_max_age_days and config.retention_max_age_days > 0:
-                cutoff = (_utcnow() - timedelta(days=config.retention_max_age_days)).replace(tzinfo=None)
+            if max_age_days and max_age_days > 0:
+                cutoff = (_utcnow() - timedelta(days=max_age_days)).replace(tzinfo=None)
                 res = session.execute(
                     delete(Match).where(Match.fetched_at < cutoff)
                 )
                 pruned += res.rowcount or 0
 
             # Count-based pruning: keep newest N.
-            if config.retention_max_matches and config.retention_max_matches > 0:
+            if max_matches and max_matches > 0:
                 total = session.scalar(select(func.count()).select_from(Match)) or 0
-                excess = total - config.retention_max_matches
+                excess = total - max_matches
                 if excess > 0:
                     # Find the id cutoff: ids of the oldest `excess` rows.
                     old_ids = session.scalars(

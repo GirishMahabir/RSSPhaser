@@ -105,3 +105,5 @@ class AppState(Base):
 # Well-known app_state keys.
 STATE_INITIALIZED = "initialized"
 STATE_POLL_INTERVAL = "poll_interval_minutes"
+STATE_RETENTION_MAX_MATCHES = "retention_max_matches"
+STATE_RETENTION_MAX_AGE_DAYS = "retention_max_age_days"

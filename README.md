@@ -109,6 +109,20 @@ Dashboard → **Sources**. Add/edit/delete feed URLs and toggle each one enabled
 **Overview** → **Polling**. Change the minutes between polls; the scheduler
 picks up the change within ~30 seconds — **no restart required**.
 
+### Retention (keeping the database bounded)
+**Overview** → **Retention**. Two limits keep the `matches` table from growing
+forever, editable live in the UI (no restart):
+
+- **Max items to keep** — keep only the newest N matches.
+- **Max age (days)** — drop matches older than N days.
+
+Set either to **0** to disable that dimension. Cleanup runs **automatically at
+the end of every poll cycle**, so it's effectively on your poll interval; you
+can also click **Run cleanup now** to prune on demand. The panel shows the
+current item count and the on-disk size of the matches table so you can tune the
+limits. (The `config.yaml` / env values are just the initial defaults; once set,
+the UI values win.)
+
 ### Dashboard / status
 Per-source last poll time, last-run duration, success/error state, last error
 message and last match count; plus totals for matches stored and active

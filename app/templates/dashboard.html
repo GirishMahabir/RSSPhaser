@@ -10,7 +10,7 @@
 <div class="metrics">
   <div class="metric">
     <div class="num">{{ total_matches }}</div>
-    <div class="lbl eyebrow">Matches stored</div>
+    <div class="lbl eyebrow">Matches stored · {{ store_size }}</div>
   </div>
   <div class="metric">
     <div class="num">{{ enabled_sources }}<small> / {{ sources|length }}</small></div>
@@ -48,6 +48,28 @@
     <button type="submit">Save interval</button>
     <span class="hint" style="padding-bottom:9px;">No restart required.</span>
   </form>
+</div>
+
+<div class="panel">
+  <div class="panel-head"><h2>Retention</h2><span class="eyebrow">Keeps the database bounded</span></div>
+  <form method="post" action="{{ url_for('update_retention') }}"
+        style="display:flex; gap:14px; align-items:flex-end; flex-wrap:wrap;">
+    <label class="field" style="max-width:190px;">
+      <span class="eyebrow">Max items to keep</span>
+      <input type="number" name="retention_max_matches" min="0" value="{{ retention_max_matches }}" class="mono">
+    </label>
+    <label class="field" style="max-width:190px;">
+      <span class="eyebrow">Max age (days)</span>
+      <input type="number" name="retention_max_age_days" min="0" value="{{ retention_max_age_days }}" class="mono">
+    </label>
+    <button type="submit">Save limits</button>
+    <span class="hint" style="padding-bottom:9px;">0 = unlimited. Cleanup runs automatically after each poll.</span>
+  </form>
+  <div style="margin-top:16px; padding-top:15px; border-top:1px solid var(--line);
+              display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+    <form method="post" action="{{ url_for('prune_now') }}"><button type="submit" class="ghost">Run cleanup now</button></form>
+    <span class="hint">Currently storing <b>{{ total_matches }}</b> items · <b>{{ store_size }}</b> on disk.</span>
+  </div>
 </div>
 
 <div class="panel">
