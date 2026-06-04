@@ -44,24 +44,30 @@
     <tbody>
       {% for k in keywords %}
       <tr>
-        <form method="post" action="{{ url_for('edit_keyword', keyword_id=k.id) }}">
-          <td><input type="text" name="term" class="mono" value="{{ k.term }}" required></td>
-          <td>
-            <select name="mode">
-              {% for m in modes %}<option value="{{ m }}" {{ 'selected' if m==k.mode }}>{{ 'whole word' if m=='word' else m }}</option>{% endfor %}
-            </select>
-          </td>
-          <td><label class="toggle"><input type="checkbox" name="enabled" {{ 'checked' if k.enabled }}><span class="track"></span></label></td>
-          <td>
-            <div class="row-actions">
-              <button type="submit" class="ghost">Save</button>
-        </form>
-              <form method="post" action="{{ url_for('delete_keyword', keyword_id=k.id) }}"
-                    onsubmit="return confirm('Delete this keyword?');">
-                <button type="submit" class="link-danger">Delete</button>
-              </form>
-            </div>
-          </td>
+        <td><input type="text" name="term" class="mono" form="ekw{{ k.id }}" value="{{ k.term }}" required></td>
+        <td>
+          <select name="mode" form="ekw{{ k.id }}">
+            {% for m in modes %}<option value="{{ m }}" {{ 'selected' if m==k.mode }}>{{ 'whole word' if m=='word' else m }}</option>{% endfor %}
+          </select>
+        </td>
+        <td>
+          {# Toggling saves immediately — its own form, auto-submitted on change. #}
+          <form method="post" action="{{ url_for('toggle_keyword', keyword_id=k.id) }}" class="toggle-form">
+            <label class="toggle"><input type="checkbox" {{ 'checked' if k.enabled }}
+                   onchange="this.form.submit()" aria-label="Enable keyword"><span class="track"></span></label>
+          </form>
+        </td>
+        <td>
+          <div class="row-actions">
+            {# Empty edit form; the term/mode inputs + Save button bind to it by id. #}
+            <form method="post" action="{{ url_for('edit_keyword', keyword_id=k.id) }}" id="ekw{{ k.id }}"></form>
+            <button type="submit" form="ekw{{ k.id }}" class="ghost">Save</button>
+            <form method="post" action="{{ url_for('delete_keyword', keyword_id=k.id) }}"
+                  onsubmit="return confirm('Delete this keyword?');">
+              <button type="submit" class="link-danger">Delete</button>
+            </form>
+          </div>
+        </td>
       </tr>
       {% else %}
       <tr><td colspan="4" class="empty">No keywords yet. Add one above.</td></tr>

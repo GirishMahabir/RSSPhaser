@@ -141,9 +141,9 @@ def _register_routes(app: Flask, config: AppConfig) -> None:
     @app.route("/sources/<int:source_id>/edit", methods=["POST"])
     @login_required
     def edit_source(source_id: int):
+        # Note: "enabled" is handled by the dedicated toggle route, not here.
         name = (request.form.get("name") or "").strip()
         url = (request.form.get("url") or "").strip()
-        enabled = request.form.get("enabled") == "on"
         if not name or not url:
             flash("Name and URL are required.", "error")
         elif not re.match(r"^https?://", url, re.IGNORECASE):
@@ -157,8 +157,18 @@ def _register_routes(app: Flask, config: AppConfig) -> None:
                     else:
                         src.name = name[:255]
                         src.url = url[:1024]
-                        src.enabled = enabled
                         flash("Source updated.", "success")
+        return redirect(url_for("sources"))
+
+    @app.route("/sources/<int:source_id>/toggle", methods=["POST"])
+    @login_required
+    def toggle_source(source_id: int):
+        # Flip enabled and persist immediately (auto-saved by the UI toggle).
+        with get_session() as s:
+            with s.begin():
+                src = s.get(Source, source_id)
+                if src is not None:
+                    src.enabled = not src.enabled
         return redirect(url_for("sources"))
 
     @app.route("/sources/<int:source_id>/delete", methods=["POST"])
@@ -199,9 +209,9 @@ def _register_routes(app: Flask, config: AppConfig) -> None:
     @app.route("/keywords/<int:keyword_id>/edit", methods=["POST"])
     @login_required
     def edit_keyword(keyword_id: int):
+        # Note: "enabled" is handled by the dedicated toggle route, not here.
         term = (request.form.get("term") or "").strip()
         mode = request.form.get("mode") or ""
-        enabled = request.form.get("enabled") == "on"
         err = _validate_keyword(term, mode)
         if err:
             flash(err, "error")
@@ -214,8 +224,18 @@ def _register_routes(app: Flask, config: AppConfig) -> None:
                     else:
                         kw.term = term[:512]
                         kw.mode = normalize_mode(mode)
-                        kw.enabled = enabled
                         flash("Keyword updated.", "success")
+        return redirect(url_for("keywords"))
+
+    @app.route("/keywords/<int:keyword_id>/toggle", methods=["POST"])
+    @login_required
+    def toggle_keyword(keyword_id: int):
+        # Flip enabled and persist immediately (auto-saved by the UI toggle).
+        with get_session() as s:
+            with s.begin():
+                kw = s.get(Keyword, keyword_id)
+                if kw is not None:
+                    kw.enabled = not kw.enabled
         return redirect(url_for("keywords"))
 
     @app.route("/keywords/<int:keyword_id>/delete", methods=["POST"])

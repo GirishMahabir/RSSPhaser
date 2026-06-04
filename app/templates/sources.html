@@ -27,20 +27,26 @@
     <tbody>
       {% for s in sources %}
       <tr>
-        <form method="post" action="{{ url_for('edit_source', source_id=s.id) }}">
-          <td><input type="text" name="name" value="{{ s.name }}" required></td>
-          <td><input type="url" name="url" class="mono" value="{{ s.url }}" required></td>
-          <td><label class="toggle"><input type="checkbox" name="enabled" {{ 'checked' if s.enabled }}><span class="track"></span></label></td>
-          <td>
-            <div class="row-actions">
-              <button type="submit" class="ghost">Save</button>
-        </form>
-              <form method="post" action="{{ url_for('delete_source', source_id=s.id) }}"
-                    onsubmit="return confirm('Delete source “{{ s.name }}”?');">
-                <button type="submit" class="link-danger">Delete</button>
-              </form>
-            </div>
-          </td>
+        <td><input type="text" name="name" form="esrc{{ s.id }}" value="{{ s.name }}" required></td>
+        <td><input type="url" name="url" class="mono" form="esrc{{ s.id }}" value="{{ s.url }}" required></td>
+        <td>
+          {# Toggling saves immediately — its own form, auto-submitted on change. #}
+          <form method="post" action="{{ url_for('toggle_source', source_id=s.id) }}" class="toggle-form">
+            <label class="toggle"><input type="checkbox" {{ 'checked' if s.enabled }}
+                   onchange="this.form.submit()" aria-label="Enable source"><span class="track"></span></label>
+          </form>
+        </td>
+        <td>
+          <div class="row-actions">
+            {# Empty edit form; the name/url inputs + Save button bind to it by id. #}
+            <form method="post" action="{{ url_for('edit_source', source_id=s.id) }}" id="esrc{{ s.id }}"></form>
+            <button type="submit" form="esrc{{ s.id }}" class="ghost">Save</button>
+            <form method="post" action="{{ url_for('delete_source', source_id=s.id) }}"
+                  onsubmit="return confirm('Delete source “{{ s.name }}”?');">
+              <button type="submit" class="link-danger">Delete</button>
+            </form>
+          </div>
+        </td>
       </tr>
       {% else %}
       <tr><td colspan="4" class="empty">No sources yet. Add one above.</td></tr>
