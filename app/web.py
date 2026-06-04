@@ -66,6 +66,9 @@ def create_app(config: AppConfig | None = None, run_bootstrap: bool = True) -> F
 
 
 def _register_routes(app: Flask, config: AppConfig) -> None:
+    def is_fetch_request() -> bool:
+        return request.headers.get("X-Requested-With") == "fetch"
+
     # ---------------- Auth ----------------
     @app.route("/login", methods=["GET", "POST"])
     def login():
@@ -152,20 +155,26 @@ def _register_routes(app: Flask, config: AppConfig) -> None:
         # Note: "enabled" is handled by the dedicated toggle route, not here.
         name = (request.form.get("name") or "").strip()
         url = (request.form.get("url") or "").strip()
+        status = 200
         if not name or not url:
             flash("Name and URL are required.", "error")
+            status = 400
         elif not re.match(r"^https?://", url, re.IGNORECASE):
             flash("URL must start with http:// or https://.", "error")
+            status = 400
         else:
             with get_session() as s:
                 with s.begin():
                     src = s.get(Source, source_id)
                     if src is None:
                         flash("Source not found.", "error")
+                        status = 404
                     else:
                         src.name = name[:255]
                         src.url = url[:1024]
                         flash("Source updated.", "success")
+        if is_fetch_request():
+            return ("", 204) if status == 200 else ("", status)
         return redirect(url_for("sources"))
 
     @app.route("/sources/<int:source_id>/toggle", methods=["POST"])
@@ -176,21 +185,28 @@ def _register_routes(app: Flask, config: AppConfig) -> None:
             with s.begin():
                 src = s.get(Source, source_id)
                 if src is not None:
-                    src.enabled = not src.enabled
+                    if "enabled" in request.form:
+                        src.enabled = request.form.get("enabled") == "on"
+                    else:
+                        src.enabled = not src.enabled
         # AJAX toggle => no-content (page stays put); plain POST => redirect.
-        if request.headers.get("X-Requested-With") == "fetch":
+        if is_fetch_request():
             return ("", 204)
         return redirect(url_for("sources"))
 
     @app.route("/sources/<int:source_id>/delete", methods=["POST"])
     @login_required
     def delete_source(source_id: int):
+        status = 404
         with get_session() as s:
             with s.begin():
                 src = s.get(Source, source_id)
                 if src is not None:
                     s.delete(src)
                     flash("Source deleted.", "success")
+                    status = 200
+        if is_fetch_request():
+            return ("", 204) if status == 200 else ("", status)
         return redirect(url_for("sources"))
 
     # ---------------- Keywords CRUD ----------------
@@ -224,18 +240,23 @@ def _register_routes(app: Flask, config: AppConfig) -> None:
         term = (request.form.get("term") or "").strip()
         mode = request.form.get("mode") or ""
         err = _validate_keyword(term, mode)
+        status = 200
         if err:
             flash(err, "error")
+            status = 400
         else:
             with get_session() as s:
                 with s.begin():
                     kw = s.get(Keyword, keyword_id)
                     if kw is None:
                         flash("Keyword not found.", "error")
+                        status = 404
                     else:
                         kw.term = term[:512]
                         kw.mode = normalize_mode(mode)
                         flash("Keyword updated.", "success")
+        if is_fetch_request():
+            return ("", 204) if status == 200 else ("", status)
         return redirect(url_for("keywords"))
 
     @app.route("/keywords/<int:keyword_id>/toggle", methods=["POST"])
@@ -246,21 +267,28 @@ def _register_routes(app: Flask, config: AppConfig) -> None:
             with s.begin():
                 kw = s.get(Keyword, keyword_id)
                 if kw is not None:
-                    kw.enabled = not kw.enabled
+                    if "enabled" in request.form:
+                        kw.enabled = request.form.get("enabled") == "on"
+                    else:
+                        kw.enabled = not kw.enabled
         # AJAX toggle => no-content (page stays put); plain POST => redirect.
-        if request.headers.get("X-Requested-With") == "fetch":
+        if is_fetch_request():
             return ("", 204)
         return redirect(url_for("keywords"))
 
     @app.route("/keywords/<int:keyword_id>/delete", methods=["POST"])
     @login_required
     def delete_keyword(keyword_id: int):
+        status = 404
         with get_session() as s:
             with s.begin():
                 kw = s.get(Keyword, keyword_id)
                 if kw is not None:
                     s.delete(kw)
                     flash("Keyword deleted.", "success")
+                    status = 200
+        if is_fetch_request():
+            return ("", 204) if status == 200 else ("", status)
         return redirect(url_for("keywords"))
 
     # ---------------- Poll interval ----------------

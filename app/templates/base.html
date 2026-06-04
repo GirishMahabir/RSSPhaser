@@ -186,16 +186,99 @@
   </main>
 
   <script>
-    // Save enable/disable toggles in place (no page reload / scroll jump).
-    function rpToggle(box){
-      var form = box.closest('form');
-      if(!form){ return; }
-      fetch(form.action, {method:'POST', headers:{'X-Requested-With':'fetch'}, credentials:'same-origin'})
+    // Save enable/disable toggles in place.
+    function rpSaveToggle(box){
+      var form = box.closest('form.toggle-form');
+      if(!form || box.dataset.saving === '1'){ return; }
+
+      var previous = !box.checked;
+      var scrollX = window.scrollX;
+      var scrollY = window.scrollY;
+      var formData = new FormData(form);
+      box.dataset.saving = '1';
+      box.disabled = true;
+
+      fetch(form.action, {
+        method: 'POST',
+        body: formData,
+        headers: {'X-Requested-With': 'fetch'},
+        credentials: 'same-origin'
+      })
         .then(function(r){
-          if(!(r.ok || r.status === 204)){ box.checked = !box.checked; alert('Could not save the change.'); }
+          if(!(r.ok || r.status === 204)){
+            box.checked = previous;
+            alert('Could not save the change.');
+          }
         })
-        .catch(function(){ box.checked = !box.checked; alert('Could not save the change.'); });
+        .catch(function(){
+          box.checked = previous;
+          alert('Could not save the change.');
+        })
+        .finally(function(){
+          delete box.dataset.saving;
+          box.disabled = false;
+          window.scrollTo(scrollX, scrollY);
+        });
     }
+
+    document.addEventListener('change', function(event){
+      var box = event.target.closest('.toggle-form input[type="checkbox"]');
+      if(box){ rpSaveToggle(box); }
+    });
+
+    document.addEventListener('submit', function(event){
+      var form = event.target.closest('form.toggle-form');
+      if(!form){ return; }
+      event.preventDefault();
+      var box = form.querySelector('input[type="checkbox"]');
+      if(box){ rpSaveToggle(box); }
+    });
+
+    function rpSubmitInPlace(form){
+      var submitter = form.querySelector('button[type="submit"], input[type="submit"]');
+      var scrollX = window.scrollX;
+      var scrollY = window.scrollY;
+      if(submitter){ submitter.disabled = true; }
+
+      return fetch(form.action, {
+        method: 'POST',
+        body: new FormData(form),
+        headers: {'X-Requested-With': 'fetch'},
+        credentials: 'same-origin'
+      })
+        .then(function(r){
+          if(!(r.ok || r.status === 204)){
+            throw new Error('Request failed');
+          }
+          return r;
+        })
+        .finally(function(){
+          if(submitter){ submitter.disabled = false; }
+          window.scrollTo(scrollX, scrollY);
+        });
+    }
+
+    document.addEventListener('submit', function(event){
+      var form = event.target.closest('form.ajax-row-form, form.ajax-delete-form');
+      if(!form || event.defaultPrevented){ return; }
+      event.preventDefault();
+
+      rpSubmitInPlace(form)
+        .then(function(){
+          if(form.classList.contains('ajax-delete-form')){
+            var row = form.closest('tr');
+            if(row){ row.remove(); }
+            var countLabel = document.querySelector('[data-count-label]');
+            if(countLabel){
+              var count = parseInt(countLabel.textContent, 10);
+              if(!isNaN(count)){ countLabel.textContent = Math.max(0, count - 1) + ' total'; }
+            }
+          }
+        })
+        .catch(function(){
+          alert('Could not save the change.');
+        });
+    });
   </script>
 </body>
 </html>
